@@ -1,0 +1,271 @@
+setwd('C:\\Users\\Master Hanzlik\\Desktop\\Charter')
+
+library(h2o)
+#localH2O = h2o.init()
+localH2O = h2o.init(ip = "localhost",nthreads=-1,port = 54321)
+
+data<-read.table("final_all_c6",sep="|",header=T)
+
+names(data)<-c('avg_has_playback_start', 'sum_internet_speed_up_mbps', 'avg_has_stream_noninit_failure', 'sum_price_video', 
+               'sum_has_next_stream_program', 'avg_has_buffer_abandon', 'avg_search_entered_returned_no_results', 'countDistinct_start_date', 
+               'sum_pibbe_ms', 'avg_bandwidth_consumed_mbps', 'sum_downshifts_score', 'avg_ad_break_cnts', 'sum_buffering_ratio', 
+               'avg_ad_event_cnts', 'sum_buffering_event_cnts', 'sum_pibd2_ms', 'sum_price_total_percent_discount', 'avg_is_under_promotion', 
+               'count_tve_username', 'avg_price_internet', 'sum_price_total_before_discount', 'avg_bitrate_mbps', 'avg_internet_speed_up_mbps', 
+               'sum_price_total_after_discount', 'sum_search_entered', 'avg_bitrate_downshift_cnts', 'countDistinct_ip_address', 
+               'countDistinct_stream_program_id', 'avg_has_stream_failure', 'sum_ip_address_cnts', 'avg_error_cnts', 'avg_price_total_after_discount', 
+               'sum_unique_searches', 'sum_has_stream_failure', 'countDistinct_visit_id', 'avg_mos_score', 'avg_ip_address_cnts', 'avg_buffering_score', 
+               'sum_search_entered_selected_results', 'avg_tenure', 'sum_has_buffer_abandon', 'countDistinct_device_id', 'avg_internet_speed_down_mbps', 
+               'avg_tune_time_ms', 'avg_unique_searches', 'sum_has_playback_start', 'sum_has_stream_stop', 'sum_tune_time_ms', 
+               'sum_watch_time_off_net_ms', 'sum_search_entered_returned_no_results', 'sum_internet_speed_down_mbps', 'avg_has_stream_stop', 
+               'sum_has_ad_abandon', 'avg_search_entered_selected_results', 'sum_price_internet', 'sum_has_stream_noninit_failure', 
+               'sum_buffering_score', 'sum_tenure', 'max_tenure_breakdown', 'sum_buffering_duration_ms', 'avg_buffering_event_cnts', 
+               'avg_level2_downshift_cnts', 'avg_pibbe_ms', 'sum_ad_event_cnts', 'sum_has_outage', 'avg_has_ad_abandon', 'avg_pibd2_ms', 
+               'sum_has_user_cancels_stream', 'avg_has_outage', 'avg_price_total_percent_discount', 'sum_bitrate_mbps', 'sum_level2_downshift_cnts', 
+               'avg_buffering_duration_ms', 'avg_price_total_before_discount', 'sum_bitrate_downshift_cnts', 'avg_bitrate_upshift_cnts', 
+               'sum_ad_break_cnts', 'sum_bitrate_upshift_cnts', 'avg_has_user_cancels_stream', 'sum_is_internet_package', 'sum_bandwidth_consumed_mbps', 
+               'avg_buffering_ratio', 'avg_downshifts_score', 'avg_search_entered', 'avg_is_internet_package', 'sum_mos_score', 'sum_error_cnts', 
+               'avg_has_next_stream_program', 'avg_price_video', 'sum_is_under_promotion','max_churn','id','churn','cluster')
+
+
+#make data random
+library(data.table)
+data<-data.table(data)
+data[,churn2:=as.factor(churn)]
+data<-data[sample(nrow(data)),]
+
+train<-data[1:round(nrow(data)*.8),]
+test<-data[(round(nrow(data)*.8)+1):(nrow(data)-nrow(data)*.10),]
+validate<-data[((round(nrow(data)*.8))+round(nrow(data)*.10)+1):nrow(data),]
+
+#Define variables
+#Dependent var has to be FACTOR
+dependent<-c("churn2")
+
+#bitrate_content_elapsed_ms, watch_time_ms, watch_time_on_net_ms - highly correlated with bandwidth_consumed_mbps
+#has_stream_init_failure - highly correlated  has_stream_failure.
+#tenure_breakdown, tenure_check, account_cnts, highly correlated with tenure,
+#'sum_watch_time_off_net_ms',
+#Dropping bad and constant columns: [avg_has_outage, avg_is_internet_package, sum_has_outage]
+
+independent<-c('avg_has_playback_start', 'sum_internet_speed_up_mbps', 'avg_has_stream_noninit_failure', 'sum_price_video', 
+               'sum_has_next_stream_program', 'avg_has_buffer_abandon', 'avg_search_entered_returned_no_results', 'countDistinct_start_date', 
+               'sum_pibbe_ms', 'avg_bandwidth_consumed_mbps', 'sum_downshifts_score', 'avg_ad_break_cnts', 'sum_buffering_ratio', 
+               'avg_ad_event_cnts', 'sum_buffering_event_cnts', 'sum_pibd2_ms', 'sum_price_total_percent_discount', 'avg_is_under_promotion', 
+               'count_tve_username', 'avg_price_internet', 'sum_price_total_before_discount', 'avg_bitrate_mbps', 'avg_internet_speed_up_mbps', 
+               'sum_price_total_after_discount', 'sum_search_entered', 'avg_bitrate_downshift_cnts', 'countDistinct_ip_address', 
+               'countDistinct_stream_program_id', 'avg_has_stream_failure', 'sum_ip_address_cnts', 'avg_error_cnts', 'avg_price_total_after_discount', 
+               'sum_unique_searches', 'sum_has_stream_failure', 'countDistinct_visit_id', 'avg_mos_score', 'avg_ip_address_cnts', 'avg_buffering_score', 
+               'sum_search_entered_selected_results', 'avg_tenure', 'sum_has_buffer_abandon', 'countDistinct_device_id', 'avg_internet_speed_down_mbps', 
+               'avg_tune_time_ms', 'avg_unique_searches', 'sum_has_playback_start', 'sum_has_stream_stop', 'sum_tune_time_ms', 
+               'sum_watch_time_off_net_ms','sum_search_entered_returned_no_results', 'sum_internet_speed_down_mbps', 'avg_has_stream_stop', 
+               'sum_has_ad_abandon', 'avg_search_entered_selected_results', 'sum_price_internet', 'sum_has_stream_noninit_failure', 
+               'sum_buffering_score', 'sum_tenure', 'max_tenure_breakdown', 'sum_buffering_duration_ms', 'avg_buffering_event_cnts', 
+               'avg_level2_downshift_cnts', 'avg_pibbe_ms', 'sum_ad_event_cnts', 'sum_has_outage', 'avg_has_ad_abandon', 'avg_pibd2_ms', 
+               'sum_has_user_cancels_stream', 'avg_has_outage', 'avg_price_total_percent_discount', 'sum_bitrate_mbps', 'sum_level2_downshift_cnts', 
+               'avg_buffering_duration_ms', 'avg_price_total_before_discount', 'sum_bitrate_downshift_cnts', 'avg_bitrate_upshift_cnts', 
+               'sum_ad_break_cnts', 'sum_bitrate_upshift_cnts', 'avg_has_user_cancels_stream', 'sum_is_internet_package', 'sum_bandwidth_consumed_mbps', 
+               'avg_buffering_ratio', 'avg_downshifts_score', 'avg_search_entered', 'avg_is_internet_package', 'sum_mos_score', 'sum_error_cnts', 
+               'avg_has_next_stream_program', 'avg_price_video', 'sum_is_under_promotion') #removed cluster so compare with pyspark model
+
+
+train_h2o <- as.h2o(train, destination_frame = 'train')
+valid_h2o <- as.h2o(validate, destination_frame = 'validate')
+test_h2o <- as.h2o(test, destination_frame = 'test')
+
+
+
+#######################################################
+################ Random Forests #######################
+#######################################################
+
+#Grid search for optimal parameters
+ntrees_opt <- list(c(500),c(850),c(900),c(950))
+#nbins_cats <-list(c(300),c(600),c(800),c(1000),c(1200),c(1500),c(2000)) #for vars, nbins for categorical vars
+max_depth_opt<-list(c(7),c(8),c(20),c(30),c(50),c(70),c(100))
+min_rows_opt<-list(c(1),c(5),c(20),c(50),c(100)) #least number of observations on a leaf
+nbins_opt<-list(c(2),c(20),c(100),c(300),c(600))#,c(800),c(1000),c(1200),c(1500),c(2000)) #for numerical vars, build a hist of at least this many bins then split at best point
+#nbins_top_level_opt<-list(c(4000)) #number of bins at top level, then divides by 2 at each ensuing level. nbins controls when to stop dividing by 2.
+mtries_opt<-list(c(10),c(20),c(30),c(50),c(70)) #column sample rate, -1 is sqrt(col)
+hyper_params <- list(ntrees=ntrees_opt,max_depth=max_depth_opt,min_rows=min_rows_opt,nbins=nbins_opt,mtries=mtries_opt)#,nbins_top_level=nbins_top_level_opt)
+
+#ntrees_opt2=c(3,40)
+#hyper_params<-list(ntrees=ntrees_opt2)
+search_criteria <- list(strategy = "RandomDiscrete", 
+                        max_models = 100, 
+                        seed = 12345,
+                        stopping_tolerance=.0001, #early stopping for validation set
+                        stopping_rounds=5, #Stop search after no improvement over the best 5 random models
+                        stopping_metric="AUC")
+
+forest_grid <- h2o.grid(algorithm="randomForest",
+                        hyper_params = hyper_params,
+                        x = independent,
+                        y = dependent,
+                        grid_id = "mygrid",
+                        #distribution = "multinomial",
+                        training_frame = train_h2o,
+                        validation_frame = valid_h2o,
+                        score_tree_interval=100, #how often to score for early stopping
+                        #standardize=T,
+                        #variable_importances = TRUE,
+                        #do_hyper_params_check=TRUE,
+                        stopping_rounds=2, 
+                        stopping_tolerance=.0001,
+                        search_criteria = search_criteria,
+                        seed=12345)
+
+
+# Get the grid results, sorted by validation AUC
+forest_sorted <- h2o.getGrid(grid_id = "mygrid",
+                             sort_by = "accuracy",
+                             decreasing = TRUE)
+
+best_model <- h2o.getModel(forest_sorted@model_ids[[1]])
+summary(best_model)
+
+
+
+
+ForestOut<-h2o.randomForest(x=independent, y=dependent, 
+                            training_frame=train_h2o, 
+                            #model_id, #input best model from grid search
+                            validation_frame =valid_h2o,
+                            #checkpoint,
+                            mtries = -1, #square root is chosen for each split decision
+                            sample_rate = 0.632,
+                            #build_tree_one_node = FALSE, 
+                            ntrees = 200, 
+                            #max_depth = 20,
+                            #min_rows = 1, 
+                            #nbins = 20, 
+                            #nbins_top_level, 
+                            #nbins_cats = 1024,
+                            binomial_double_trees = FALSE, 
+                            balance_classes = FALSE,
+                            max_after_balance_size = 5, 
+                            #seed, 
+                            offset_column = NULL,
+                            weights_column = NULL, 
+                            #nfolds = 3, 
+                            #fold_column = NULL,
+                            #fold_assignment = c("AUTO"), #c("AUTO", "Random", "Modulo")
+                            #keep_cross_validation_predictions = FALSE, 
+                            #score_each_iteration = FALSE,
+                            #stopping_rounds = 3, 
+                            stopping_metric = c("AUTO"), #c("AUTO", "deviance", "logloss","MSE", "AUC", "r2", "misclassification"), 
+                            #stopping_tolerance = 0.001,
+                            #score_tree_interval=50 #scores entire model each 50 trees for early stopping
+                            
+                            score_tree_interval=100, #how often to score for early stopping
+                            #standardize=T,
+                            #variable_importances = TRUE,
+                            #do_hyper_params_check=TRUE,
+                            stopping_rounds=2, 
+                            stopping_tolerance=.0001
+)
+
+#h2o.performance(ForestOut, newdata=test_h2o)
+
+#Test new data with model
+perf_forest<-h2o.performance(ForestOut, newdata=test_h2o)
+#confusion matrix of new model
+h2o.confusionMatrix(perf_forest)
+
+h2o.saveModel(ForestOut,"C:\\Users\\Master Hanzlik\\Desktop\\ShOW", force=T)
+
+#####################################################
+############## Gradient Boosting Machines############
+#####################################################
+
+#Grid search for optimal parameters
+ntrees <- list(c(10), c(30), c(50),c(70),c(90),c(110),c(130))
+nbins_cats <-list(c(600),c(700),c(800),c(900),c(1000),c(1100),c(1200))
+max_depth<-list(c(3),c(4),c(4),c(6),c(7),c(8))
+hyper_params <- list(ntrees=ntrees,nbins_cats=nbins_cats,max_depth=max_depth)
+
+ntrees <- list(c(130),c(150),c(170))
+nbins_cats <-list(c(750),c(800),c(850))
+max_depth<-list(c(8),c(10),c(18))
+hyper_params <- list(ntrees=ntrees,nbins_cats=nbins_cats,max_depth=max_depth)
+
+gbm_grid <- h2o.grid("gbm",
+                     #hyper_params = hyper_params2,
+                     x = independent,
+                     y = dependent,
+                     distribution = "multinomial",
+                     training_frame = train_h2o,
+                     validation_frame = valid_h2o,
+                     #standardize=T,
+                     #variable_importances = TRUE,
+                     do_hyper_params_check=TRUE)
+
+
+GbmOut_500 = h2o.gbm(y = dependent, x = independent,
+                 distribution="multinomial",
+                 training_frame = train_h2o, 
+                 validation_frame = valid_h2o,
+                 #model_id="Grid_GBM_train_model_R_1459961871216_4_model_18",
+                 ntrees=500,
+                 nbins_cats=750,
+                 max_depth=12
+                 #variable_importance=T
+                 #ntrees=100, 
+                 #max_depth=4, 
+                 #nfolds = 3,
+                 #learn_rate=0.1
+)
+#Test new data with model
+perf_gbm<-h2o.performance(GbmOut_500, newdata=test_h2o)
+#confusion matrix of new model
+h2o.confusionMatrix(perf_gbm)
+
+h2o.performance(GbmOut, newdata=test_h2o)
+h2o.saveModel(GbmOut,"C:\\Users\\Master Hanzlik\\Desktop\\ShOW", force=T)
+
+h2o.performance(ForestOut, newdata=all_data)
+
+var_imp<-h2o.varimp(GbmOut)
+
+GbmOut 72%
+gbmOut_200 75%
+gbmOut_500 74%
+
+
+
+81    sum_search_entered_selected_results            0.000000          0.000000   0.000000
+82 sum_search_entered_returned_no_results            0.000000          0.000000   0.000000
+83           sum_internet_speed_down_mbps            0.000000          0.000000   0.000000
+84                    sum_buffering_score            0.000000          0.000000   0.000000
+85              sum_level2_downshift_cnts            0.000000          0.000000   0.000000
+86                      sum_ad_break_cnts            0.000000          0.000000   0.000000
+87                         sum_error_cnts            0.000000          0.000000   0.000000
+
+
+independent2<-c('avg_has_playback_start', 'sum_internet_speed_up_mbps', 'avg_has_stream_noninit_failure', 'sum_price_video', 
+               'sum_has_next_stream_program', 'avg_has_buffer_abandon', 'avg_search_entered_returned_no_results', 'countDistinct_start_date', 
+               'sum_pibbe_ms', 'avg_bandwidth_consumed_mbps', 'sum_downshifts_score', 'avg_ad_break_cnts', 'sum_buffering_ratio', 
+               'avg_ad_event_cnts', 'sum_buffering_event_cnts', 'sum_pibd2_ms', 'sum_price_total_percent_discount', 'avg_is_under_promotion', 
+               'count_tve_username', 'avg_price_internet', 'sum_price_total_before_discount', 'avg_bitrate_mbps', 'avg_internet_speed_up_mbps', 
+               'sum_price_total_after_discount', 'sum_search_entered', 'avg_bitrate_downshift_cnts', 'countDistinct_ip_address', 
+               'countDistinct_stream_program_id', 'avg_has_stream_failure', 'sum_ip_address_cnts', 'avg_error_cnts', 'avg_price_total_after_discount', 
+               'sum_unique_searches', 'sum_has_stream_failure', 'countDistinct_visit_id', 'avg_mos_score', 'avg_ip_address_cnts', 'avg_buffering_score', 
+               'avg_tenure', 'sum_has_buffer_abandon', 'countDistinct_device_id', 'avg_internet_speed_down_mbps', 
+               'avg_tune_time_ms', 'avg_unique_searches', 'sum_has_playback_start', 'sum_has_stream_stop', 'sum_tune_time_ms', 
+               'sum_watch_time_off_net_ms', 'avg_has_stream_stop', 
+               'sum_has_ad_abandon', 'avg_search_entered_selected_results', 'sum_price_internet', 'sum_has_stream_noninit_failure', 
+              'sum_tenure', 'max_tenure_breakdown', 'sum_buffering_duration_ms', 'avg_buffering_event_cnts', 
+               'avg_level2_downshift_cnts', 'avg_pibbe_ms', 'sum_ad_event_cnts', 'sum_has_outage', 'avg_has_ad_abandon', 'avg_pibd2_ms', 
+               'sum_has_user_cancels_stream', 'avg_has_outage', 'avg_price_total_percent_discount', 'sum_bitrate_mbps', 
+               'avg_buffering_duration_ms', 'avg_price_total_before_discount', 'sum_bitrate_downshift_cnts', 'avg_bitrate_upshift_cnts', 
+               'sum_bitrate_upshift_cnts', 'avg_has_user_cancels_stream', 'sum_is_internet_package', 'sum_bandwidth_consumed_mbps', 
+               'avg_buffering_ratio', 'avg_downshifts_score', 'avg_search_entered', 'avg_is_internet_package', 'sum_mos_score', 
+               'avg_has_next_stream_program', 'avg_price_video', 'sum_is_under_promotion') #removed cluster so compare with pyspark model
+
+
+
+
+
+
+
+
+
