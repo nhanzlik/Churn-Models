@@ -1,0 +1,64 @@
+from boruta import BorutaPy
+from sklearn.ensemble import RandomForestClassifier
+import pandas as pd
+import numpy
+import sys
+import csv
+import subprocess
+
+print(sys.argv[1])
+
+data=pd.read_table(sys.argv[1],sep="\t")
+
+#Boruta method requires all data to be numeric
+data=data.apply(pd.to_numeric,errors='coerce').fillna(0)
+
+y_data=data['churn']
+x_data=data[data.columns.difference(['churn'])]
+
+
+rf=RandomForestClassifier(n_jobs = -1, max_depth = 5)
+
+feature_selector = BorutaPy(rf, n_estimators = 'auto', verbose = 2, random_state = 1)
+
+feature_selector.fit(x_data.values,y_data)
+
+#Return features that pass boruta method
+features_to_keep=feature_selector.transform(x_data.values)
+
+filtered_list = [i for (i, v) in zip(x_data.columns, feature_selector.support_) if v]
+
+keep_vars=[names for names in x_data.columns if names in filtered_list]
+
+#Attach churn back onto variables to keep
+keep_vars.insert(0,"churn")
+
+print("Variables to keep", list(keep_vars))
+
+#Write to csv
+with open('keep_vars_boruta.csv','w') as csvFile:
+    writer=csv.writer(csvFile)
+    writer.writerows([keep_vars])
+csvFile.close()
+
+#setup hdfs connection
+def run_cmd(args_list):
+        """
+        run linux commands
+        """
+        # import subprocess
+        print('Running system command: {0}'.format(' '.join(args_list)))
+        proc = subprocess.Popen(args_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8') #add encoding
+        s_output, s_err = proc.communicate()
+        s_return =  proc.returncode
+        return s_return, s_output, s_err
+
+
+#clean hdfs
+(ret, out, err)= run_cmd(['hdfs', 'dfs', '-rm','/data/workspace/churn/correlation_analysis/keep_vars_boruta.csv'])
+lines = out.split('\n')
+
+#write to hdfs
+(ret, out, err)= run_cmd(['hdfs', 'dfs', '-copyFromLocal','/data/workspace/nhanzlik/boruta/keep_vars_boruta.csv', 
+                          '/data/workspace/churn/correlation_analysis/keep_vars_boruta.csv'])
+lines = out.split('\n')
