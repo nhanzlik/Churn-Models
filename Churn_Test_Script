@@ -1,0 +1,15 @@
+#churn test set
+
+#!/bin/bash
+
+#features are created from the most recent date (curent date) and 90 days previous to that date (min_date_agg)
+export current_date='2018-01-31'
+export min_date_agg='2017-11-01'
+
+echo "running queries between '${min_date_agg}' and '${current_date}'"
+
+hive -f churn_test_queries.hql -hiveconf current_date=${current_date} -hiveconf min_date_agg=${min_date_agg}
+
+#copy data to local, CHANGE TO YOUR DIRECTORIES
+hive -e"select * from dev.churn_all_vars_90day" > /home/nhanzlik/churn_all_vars90day.tsv
+scp gv101:/home/nhanzlik/churn_all_vars90day.tsv /Users/rush/Documents/.
